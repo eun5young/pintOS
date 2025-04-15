@@ -23,6 +23,10 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+//과제 1-3             
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
 
 /* A kernel thread or user process.
 
@@ -107,6 +111,10 @@ struct thread
     struct list donations;           // a list of donated priorities
     struct lock *wait_on_lock; // The lock that I'm waiting for
     struct list_elem donation_elem;
+
+    //1-3과제
+    int nice;
+    int recent_cpu;
 
   };
 

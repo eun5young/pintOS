@@ -7,6 +7,8 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/fixed_point.h"
+
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -175,6 +177,21 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
+  //과제 1-3
+  if (thread_mlfqs) {
+    mlfqs_increment_recent_cpu ();
+    if (ticks % 4 == 0) {
+      mlfqs_recalculate_priority ();
+      if (ticks % TIMER_FREQ == 0) {
+        mlfqs_recalculate_recent_cpu ();
+        mlfqs_calculate_load_avg ();
+      }
+    }
+  }
+  //여기까지 1-3
+
+
   thread_wakeup (ticks); //Perform a wake operation with increasing ticks
 }
 

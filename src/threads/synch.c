@@ -32,6 +32,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -62,7 +63,7 @@ sema_init (struct semaphore *sema, unsigned value)
    interrupt handler.  This function may be called with
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. */
-bool cmp_priority(const struct list_elem *, const struct list_elem *, void *);
+// bool cmp_priority(const struct list_elem *, const struct list_elem *, void *);
 void
 sema_down (struct semaphore *sema) 
 {
@@ -212,6 +213,13 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
+  //바로밑부분: 과제 1-3 priority donation을 비활성화
+  if (thread_mlfqs) {
+    sema_down (&lock->semaphore);
+    lock->holder = thread_current ();
+    return ;
+  }
+
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
@@ -229,7 +237,7 @@ lock_acquire (struct lock *lock)
   }
 
   sema_down (&lock->semaphore);
-  
+  // lock->holder = thread_current ();
   cur->wait_on_lock = NULL;
   lock->holder = cur;
 }
@@ -262,13 +270,20 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
+  //바로 밑부분: 과제 1-3 부분
+  lock->holder = NULL;
+  if (thread_mlfqs) {
+    sema_up (&lock->semaphore);
+    return ;
+  }
+
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
   // Remove donations related to this lock
   remove_with_lock(lock);
 
-  // Recalculate priority
+  // // Recalculate priority
   refresh_priority();
 
   lock->holder = NULL;
