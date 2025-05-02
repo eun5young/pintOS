@@ -19,14 +19,11 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
+
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-//과제 1-3             
-#define NICE_DEFAULT 0
-#define RECENT_CPU_DEFAULT 0
-#define LOAD_AVG_DEFAULT 0
 
 /* A kernel thread or user process.
 
@@ -83,7 +80,7 @@ typedef int tid_t;
    semaphore wait list (synch.c).  It can be used these two ways
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
-   blocked state is on a semaphore wait list. */
+   waiting_on_lock state is on a semaphore wait list. */
 struct thread
   {
     /* Owned by thread.c. */
@@ -92,6 +89,18 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int nice;//4.4
+    int recent_cpu;//4.4
+
+    /* $$$$ changes $$$$ */
+    int64_t sleepingtime;  //
+    int basepriority;
+    struct thread *locker_thread;    //lock I am waiting for is acquired by this thread
+    struct list donation_list;       //list of all donated priorities (to me)
+    struct lock *waiting_on_lock;    //lock on which I am waiting
+    struct list_elem donorelem;      //list element for donations_list
+    /* $$$$ changes $$$$ */
+
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -104,18 +113,6 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-    int64_t wake_up_time;  		/* tick time when the thread will wake up */
-
-    int init_priority;               // Initial Priority
-    struct list donations;           // a list of donated priorities
-    struct lock *wait_on_lock; // The lock that I'm waiting for
-    struct list_elem donation_elem;
-
-    //1-3과제
-    int nice;
-    int recent_cpu;
-
   };
 
 /* If false (default), use round-robin scheduler.
@@ -142,9 +139,6 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
-void thread_sleep(int64_t ticks);
-void thread_wakeup(int64_t ticks);
-
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
@@ -157,13 +151,10 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-void donate_priority(void);
-
-void remove_with_lock(struct lock *lock);
-void refresh_priority(void);
-
-bool thread_compare_donate_priority(const struct list_elem *l,
-                                    const struct list_elem *s,
-                                    void *aux UNUSED);
+/* $$$$ changes $$$$ */
+bool sleeptime_comparator(struct list_elem *a, struct list_elem *b, void *aux);
+bool priority_comparator(struct list_elem *a, struct list_elem *b, void *aux);
+bool priority_comparator_reverse(struct list_elem *a, struct list_elem *b, void *aux);
+/* $$$$ changes $$$$ */
 
 #endif /* threads/thread.h */
