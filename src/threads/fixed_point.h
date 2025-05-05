@@ -1,20 +1,28 @@
-#ifndef THREADS_FIXED_POINT_H
-#define THREADS_FIXED_POINT_H
+//modified by me
+#ifndef FIXED_POINT_H
+#define FIXED_POINT_H
 
-#include <stdint.h>
 
-#define F (1 << 14)
+#define F (1 << 14)  
 
+
+
+
+int fp_to_int_zero(int x);        
+int fp_to_int_nearest(int x);    
 int int_to_fp(int n);
-int fp_to_int_round(int x);
-int add_fp(int x, int y);
-int sub_fp(int x, int y);
-int mult_fp(int x, int y);
-int div_fp(int x, int y);
-int mult_mixed(int x, int n);
-int div_mixed(int x, int n);
-int add_mixed(int x, int n);
-int sub_mixed(int x, int n);
 
 
-#endif /* threads/fixed-point.h */
+int fp_add(int x, int y);
+int fp_sub(int x, int y);
+int fp_add_int(int x, int n);
+int fp_sub_int(int x, int n);
+
+
+int fp_mul(int x, int y);
+int fp_mul_int(int x, int n);
+int fp_div(int x, int y);
+int fp_div_int(int x, int n);
+
+
+#endif
