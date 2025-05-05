@@ -3,12 +3,11 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-#include "threads/fixed_point.h"
-
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -18,6 +17,10 @@
 #if TIMER_FREQ > 1000
 #error TIMER_FREQ <= 1000 recommended
 #endif
+
+/* $$$$ Our magical changes here $$$$ */
+struct list sleeping_threads;
+/* $$$$ Our magical changes end  $$$$ */
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -36,7 +39,10 @@ static void real_time_delay (int64_t num, int32_t denom);
    and registers the corresponding interrupt. */
 void
 timer_init (void) 
-{
+{ /* $$$$ Our magical changes here $$$$ */
+  list_init(&sleeping_threads);
+  /* $$$$ Our magical changes end  $$$$ */
+
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -62,7 +68,7 @@ timer_calibrate (void)
   /* Refine the next 8 bits of loops_per_tick. */
   high_bit = loops_per_tick;
   for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
-    if (!too_many_loops (high_bit | test_bit))
+    if (!too_many_loops (loops_per_tick | test_bit))
       loops_per_tick |= test_bit;
 
   printf ("%'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
@@ -93,12 +99,25 @@ timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
 
-  //ASSERT (intr_get_level () == INTR_ON);
-  //while (timer_elapsed (start) < ticks) 
-    //thread_yield ();
+  ASSERT (intr_get_level () == INTR_ON);
 
-  thread_sleep (start + ticks); //Make the thread sleep as long as the ticks
+  /* $$$$ Our magical changes here $$$$ */
 
+  if(ticks>0){  //can't sleep for less than 0 ticks -don't fool me
+
+    enum intr_level old_level;
+    old_level=intr_disable();   //disable interrupts to prevent racing conditions
+    struct thread *cur=thread_current();
+    cur->sleepingtime= (ticks + timer_ticks());   //sleep for "ticks" ticks   
+    /*insert this thread in sleeping threads list and sort according to its sleeptime (using sleeptime_comparator)*/
+    list_insert_ordered (&sleeping_threads,&cur->elem,sleeptime_comparator,NULL);
+    thread_block();       //block this thread
+    intr_set_level(old_level);  //restore interrupt level
+
+  }
+
+  /* $$$$ Our magical changes end  $$$$ */
+  
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -170,29 +189,33 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  /* $$$$ Our magical changes here $$$$ */
+  
+  struct list_elem *front;
+  struct thread *entry;
+  while(true){
+    if(list_empty(&sleeping_threads)==true)
+      break;
 
-  //과제 1-3
-  if (thread_mlfqs) {
-    mlfqs_increment_recent_cpu ();
-    if (ticks % 4 == 0) {
-      mlfqs_recalculate_priority ();
-      if (ticks % TIMER_FREQ == 0) {
-        mlfqs_recalculate_recent_cpu ();
-        mlfqs_calculate_load_avg ();
-      }
+    front=list_front(&sleeping_threads);
+    entry=list_entry(front,struct thread,elem);
+    if(entry->sleepingtime>ticks)
+      break;
+    else{
+      list_remove(front);
+      thread_unblock(entry);
     }
+
   }
-  //여기까지 1-3
 
-
-  thread_wakeup (ticks); //Perform a wake operation with increasing ticks
+  /* $$$$ Our magical changes end  $$$$ */
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
