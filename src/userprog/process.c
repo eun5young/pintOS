@@ -20,6 +20,9 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+/*2-1*/
+void argument_stack(char *argv[], int argc, void **esp);
+/*2-1*/
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -38,6 +41,12 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* 2-1 */
+  /* 2. 프로그램 이름만 추출 */
+  char *save_ptr;
+  char *program_name = strtok_r (fn_copy, " ", &save_ptr);  // 첫 번째 토큰
+  //&save_ptr: 현재 파싱 위치를 기억하는 포인터 (상태 저장용)
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -54,17 +63,61 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+
+  /* 2-1 */
+  // /* We first kill the current context */
+	// process_cleanup ();
+
+	// 파싱 준비
+  char *argv[128];
+  int argc = 0;
+  char *token, *save_ptr;
+
+  // 인자 문자열 복사 (원본이 덮이면 안되므로)
+  char *fn_copy = palloc_get_page(0);
+  if (fn_copy == NULL)
+    thread_exit();
+  strlcpy(fn_copy, file_name, PGSIZE);
+
+  // strtok_r로 인자 나누기
+  for (token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r(NULL, " ", &save_ptr))
+  {
+    argv[argc++] = token;
+  }
+  /*2-1*/
+
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+
+  success = load (argv[0], &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  // palloc_free_page (file_name);
+  // if (!success) 
+  //   thread_exit ();
+
+  /*2-1*/
+  // if (success) {
+  //   argument_stack(argv, argc, &if_.esp);
+  // }
+
+  if (!success)
+  {
+    palloc_free_page(fn_copy);
+    thread_exit();
+  }
+
+  argument_stack(argv, argc, &if_.esp);
+  hex_dump(if_.esp , if_.esp , PHYS_BASE - if_.esp , true);
+  
+
+  palloc_free_page(fn_copy);
+  /*2-1*/
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,6 +141,12 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  /*2-1*/
+  volatile int i;
+  for (i = 0; i < 100000000; i++)
+    ; // 아무것도 하지 않음 (busy-wait)
+  /*2-1*/
+
   return -1;
 }
 
@@ -462,4 +521,50 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/*2-1*/
+void argument_stack(char *argv[], int argc, void **esp) {
+    char *arg_ptr[argc];
+    int total_len = 0;
+
+    // Step 1: 문자열을 역순으로 스택에 복사
+    int i;
+    for (i = argc - 1; i >= 0; i--) {
+        int len = strlen(argv[i]) + 1;
+        *esp -= len;
+        memcpy(*esp, argv[i], len);
+        arg_ptr[i] = *esp;
+    }
+
+    // Step 2: word alignment
+    uintptr_t align = (uintptr_t)(*esp) % 4;
+    if (align) {
+        *esp -= align;
+        memset(*esp, 0, align);
+    }
+
+    // Step 3: NULL 포인터
+    *esp -= sizeof(char *);
+    memset(*esp, 0, sizeof(char *));
+
+    // Step 4: argv[i] 주소들 (역순)
+    int j;
+    for (j = argc - 1; j >= 0; j--) {
+        *esp -= sizeof(char *);
+        memcpy(*esp, &arg_ptr[j], sizeof(char *));
+    }
+
+    // Step 5: argv 주소
+    char **argv_addr = *esp;
+    *esp -= sizeof(char **);
+    memcpy(*esp, &argv_addr, sizeof(char **));
+
+    // Step 6: argc
+    *esp -= sizeof(int);
+    memcpy(*esp, &argc, sizeof(int));
+
+    // Step 7: return address
+    *esp -= sizeof(void *);
+    memset(*esp, 0, sizeof(void *));
 }
