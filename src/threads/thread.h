@@ -115,6 +115,10 @@ struct thread
     //modified by me
       int nice;                          /* Nice value for MLFQS. */
       int recent_cpu;                   /* Recent CPU usage for MLFQS. */
+
+      /*pintos2-2*/
+      int exit_status;
+      /*2-2*/
   };
 
 /* If false (default), use round-robin scheduler.
