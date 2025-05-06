@@ -69,8 +69,8 @@ start_process (void *file_name_)
 	// process_cleanup ();
 
 	// 파싱 준비
-  char *argv[128];
-  int argc = 0;
+  char *parse[128];
+  int count = 0;
   char *token, *save_ptr;
 
   // 인자 문자열 복사 (원본이 덮이면 안되므로)
@@ -83,7 +83,7 @@ start_process (void *file_name_)
   for (token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
        token = strtok_r(NULL, " ", &save_ptr))
   {
-    argv[argc++] = token;
+    parse[count++] = token;
   }
   /*2-1*/
 
@@ -94,7 +94,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  success = load (argv[0], &if_.eip, &if_.esp);
+  success = load (parse[0], &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   // palloc_free_page (file_name);
@@ -112,7 +112,7 @@ start_process (void *file_name_)
     thread_exit();
   }
 
-  argument_stack(argv, argc, &if_.esp);
+  argument_stack(parse, count, &if_.esp);
   hex_dump(if_.esp , if_.esp , PHYS_BASE - if_.esp , true);
   
 
