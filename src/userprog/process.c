@@ -44,7 +44,7 @@ process_execute (const char *file_name)
   /* 2-1 */
   /* 2. 프로그램 이름만 추출 */
   char *save_ptr;
-  char *program_name = strtok_r (fn_copy, " ", &save_ptr);  // 첫 번째 토큰
+  strtok_r (file_name, " ", &save_ptr);  // 첫 번째 토큰
   //&save_ptr: 현재 파싱 위치를 기억하는 포인터 (상태 저장용)
 
   /* Create a new thread to execute FILE_NAME. */
@@ -143,7 +143,7 @@ process_wait (tid_t child_tid UNUSED)
 {
   /*2-1*/
   volatile int i;
-  for (i = 0; i < 100000000; i++)
+  for (i = 0; i < 1000000000; i++)
     ; // 아무것도 하지 않음 (busy-wait)
   /*2-1*/
 
