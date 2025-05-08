@@ -173,4 +173,3 @@ void update_recent_cpu_all(void);
 void update_priority_all(void);
 
 #endif /* threads/thread.h */
-

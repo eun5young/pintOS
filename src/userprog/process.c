@@ -113,7 +113,7 @@ start_process (void *file_name_)
   }
 
   argument_stack(parse, count, &if_.esp);
-  hex_dump(if_.esp , if_.esp , PHYS_BASE - if_.esp , true);
+  //hex_dump(if_.esp , if_.esp , PHYS_BASE - if_.esp , true);
   
 
   palloc_free_page(fn_copy);
