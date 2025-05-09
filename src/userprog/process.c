@@ -92,7 +92,7 @@ static void start_process(void *file_name_) {
 
   // 슬라이드: 인자들을 스택에 넣음
   argument_stack(argv, argc, &if_.esp);
-  hex_dump(if_.esp , if_.esp , PHYS_BASE - if_.esp , true);
+  //hex_dump(if_.esp , if_.esp , PHYS_BASE - if_.esp , true);
 
   palloc_free_page(file_name);
 
@@ -259,6 +259,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  /*2-3-1*/
+  /* Prevent writes to the executable while it is running. */
+  file_deny_write (file);
+  /*2-3-1*/
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
