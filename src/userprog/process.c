@@ -28,31 +28,67 @@ void argument_stack(char *argv[], int argc, void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+// tid_t
+// process_execute (const char *file_name) 
+// {
+//   char *fn_copy;
+//   tid_t tid;
+
+//   /* Make a copy of FILE_NAME.
+//      Otherwise there's a race between the caller and load(). */
+//   fn_copy = palloc_get_page (0);
+//   if (fn_copy == NULL)
+//     return TID_ERROR;
+//   strlcpy (fn_copy, file_name, PGSIZE);
+
+//   /* 2-1 */
+//   /* 2. 프로그램 이름만 추출 */
+//   char *save_ptr;
+//   strtok_r (file_name, " ", &save_ptr);  // 첫 번째 토큰
+//   //&save_ptr: 현재 파싱 위치를 기억하는 포인터 (상태 저장용)
+
+//   /* Create a new thread to execute FILE_NAME. */
+//   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+//   if (tid == TID_ERROR)
+//     palloc_free_page (fn_copy); 
+//   return tid;
+// }
+
 tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
+  /* Make a copy of FILE_NAME to pass into start_process(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* 2-1 */
-  /* 2. 프로그램 이름만 추출 */
-  char *save_ptr;
-  strtok_r (file_name, " ", &save_ptr);  // 첫 번째 토큰
-  //&save_ptr: 현재 파싱 위치를 기억하는 포인터 (상태 저장용)
+  /* ✨ 프로그램 이름 추출을 위한 임시 복사본 생성 */
+  char *file_name_copy = palloc_get_page(0);
+  if (file_name_copy == NULL) {
+    palloc_free_page(fn_copy);
+    return TID_ERROR;
+  }
+  strlcpy(file_name_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  /* ✨ strtok_r 사용은 복사본에만 적용 */
+  char *save_ptr;
+  char *program_name = strtok_r(file_name_copy, " ", &save_ptr);
+
+  /* Create a new thread to execute program_name */
+  tid = thread_create(program_name, PRI_DEFAULT, start_process, fn_copy);
+
+  /* Cleanup */
+  palloc_free_page(file_name_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page(fn_copy);
+
   return tid;
 }
+
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -524,39 +560,173 @@ install_page (void *upage, void *kpage, bool writable)
 }
 
 /*2-1*/
-void argument_stack(char *argv[], int argc, void **esp) {
-    char *arg_ptr[argc];
-    int total_len = 0;
+// void argument_stack(char *argv[], int argc, void **esp) {
+//     char *arg_ptr[argc];
+//     int total_len = 0;
 
-    // Step 1: 문자열을 역순으로 스택에 복사
+//     // Step 1: 문자열을 역순으로 스택에 복사
+//     int i;
+//     for (i = argc - 1; i >= 0; i--) {
+//         int len = strlen(argv[i]) + 1;
+//         *esp -= len;
+//         memcpy(*esp, argv[i], len);
+//         arg_ptr[i] = *esp;
+//     }
+
+//     // Step 2: word alignment
+//     uintptr_t align = (uintptr_t)(*esp) % 4;
+//     if (align) {
+//         *esp -= align;
+//         memset(*esp, 0, align);
+//     }
+
+//     // Step 3: NULL 포인터
+//     *esp -= sizeof(char *);
+//     memset(*esp, 0, sizeof(char *));
+
+//     // Step 4: argv[i] 주소들 (역순)
+//     int j;
+//     for (j = argc - 1; j >= 0; j--) {
+//         *esp -= sizeof(char *);
+//         memcpy(*esp, &arg_ptr[j], sizeof(char *));
+//     }
+
+//     // Step 5: argv 주소
+//     char **argv_addr = *esp;
+//     *esp -= sizeof(char **);
+//     memcpy(*esp, &argv_addr, sizeof(char **));
+
+//     // Step 6: argc
+//     *esp -= sizeof(int);
+//     memcpy(*esp, &argc, sizeof(int));
+
+//     // Step 7: return address
+//     *esp -= sizeof(void *);
+//     memset(*esp, 0, sizeof(void *));
+// }
+
+// void argument_stack(char *argv[], int argc, void **esp) {
+//     char *arg_ptr[argc];
+//     int total_len = 0;
+
+//     // Step 1: 문자열을 역순으로 복사
+//     int i;
+//     for (i = argc - 1; i >= 0; i--) {
+//         int len = strlen(argv[i]) + 1;
+//         *esp -= len;
+//         memcpy(*esp, argv[i], len);
+//         arg_ptr[i] = *esp;
+//     }
+
+//     // Step 2: word align (4바이트 정렬)
+//     uintptr_t align = (uintptr_t)(*esp) % 4;
+//     if (align) {
+//         *esp -= align;
+//         memset(*esp, 0, align);
+//     }
+
+//     // Step 3: null sentinel
+//     *esp -= sizeof(char *);
+//     memset(*esp, 0, sizeof(char *));
+
+//     // Step 4: argv[i] 주소들 (순서대로!)
+//     int j;
+//     for (j = argc - 1; j >= 0; j--) {
+//         *esp -= sizeof(char *);
+//         memcpy(*esp, &arg_ptr[j], sizeof(char *));
+//     }
+
+//     // Step 5: argv 주소 (char **argv)
+//     char **argv_addr = (char **)*esp;
+//     *esp -= sizeof(char **);
+//     memcpy(*esp, &argv_addr, sizeof(char **));
+
+//     // Step 6: argc
+//     *esp -= sizeof(int);
+//     memcpy(*esp, &argc, sizeof(int));
+
+//     // Step 7: return address
+//     *esp -= sizeof(void *);
+//     memset(*esp, 0, sizeof(void *));
+// }
+
+
+// void argument_stack(char *argv[], int argc, void **esp) {
+//     char *arg_ptr[argc];
+//     int i;
+
+//     // Step 1: 문자열을 복사 (역순)
+//     for (i = argc - 1; i >= 0; i--) {
+//         int len = strlen(argv[i]) + 1;
+//         *esp -= len;
+//         memcpy(*esp, argv[i], len);
+//         arg_ptr[i] = *esp;
+//     }
+
+//     // Step 2: align to word size (4 bytes)
+//     uintptr_t align = (uintptr_t)(*esp) % 4;
+//     if (align) {
+//         *esp -= align;
+//         memset(*esp, 0, align);
+//     }
+
+//     // Step 3: null sentinel
+//     *esp -= sizeof(char *);
+//     memset(*esp, 0, sizeof(char *));
+
+//     // Step 4: argv[i] 포인터 저장 (역순)
+//     for (i = argc - 1; i >= 0; i--) {
+//         *esp -= sizeof(char *);
+//         memcpy(*esp, &arg_ptr[i], sizeof(char *));
+//     }
+
+//     // Step 5: argv 주소 저장
+//     char **argv_addr = *esp;
+//     *esp -= sizeof(char **);
+//     memcpy(*esp, &argv_addr, sizeof(char **));
+
+//     // Step 6: argc 저장
+//     *esp -= sizeof(int);
+//     memcpy(*esp, &argc, sizeof(int));
+
+//     // Step 7: return address 저장
+//     *esp -= sizeof(void *);
+//     memset(*esp, 0, sizeof(void *));
+// }
+
+
+void argument_stack(char *argv[], int argc, void **esp) {
+    char *arg_ptr[128];  // 최대 128개의 인자를 가정 (args-multiple 테스트도 고려)
+
+    // Step 1: 문자열을 스택에 복사 (역순)
     int i;
     for (i = argc - 1; i >= 0; i--) {
-        int len = strlen(argv[i]) + 1;
+        int len = strlen(argv[i]) + 1;  // NULL 포함
         *esp -= len;
         memcpy(*esp, argv[i], len);
-        arg_ptr[i] = *esp;
+        arg_ptr[i] = *esp;  // 해당 문자열이 저장된 주소
     }
 
-    // Step 2: word alignment
+    // Step 2: 4바이트 정렬 (word-align)
     uintptr_t align = (uintptr_t)(*esp) % 4;
     if (align) {
         *esp -= align;
         memset(*esp, 0, align);
     }
 
-    // Step 3: NULL 포인터
+    // Step 3: NULL sentinel (argv[argc] = NULL)
     *esp -= sizeof(char *);
     memset(*esp, 0, sizeof(char *));
 
-    // Step 4: argv[i] 주소들 (역순)
+    // Step 4: argv[i] 주소를 역순으로 푸시
     int j;
     for (j = argc - 1; j >= 0; j--) {
         *esp -= sizeof(char *);
         memcpy(*esp, &arg_ptr[j], sizeof(char *));
     }
 
-    // Step 5: argv 주소
-    char **argv_addr = *esp;
+    // Step 5: argv (char **)
+    char **argv_addr = (char **)*esp;
     *esp -= sizeof(char **);
     memcpy(*esp, &argv_addr, sizeof(char **));
 
@@ -564,7 +734,7 @@ void argument_stack(char *argv[], int argc, void **esp) {
     *esp -= sizeof(int);
     memcpy(*esp, &argc, sizeof(int));
 
-    // Step 7: return address
+    // Step 7: return address (dummy 0)
     *esp -= sizeof(void *);
     memset(*esp, 0, sizeof(void *));
 }

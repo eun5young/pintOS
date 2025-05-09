@@ -14,6 +14,7 @@
 #include <stdint.h>
 /*2-3*/
 #include "threads/synch.h"
+#include "lib/kernel/console.h"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -106,11 +107,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       const void *buffer = *(void **)(f->esp + 8);
       unsigned size = *(unsigned *)(f->esp + 12);
 
-      if (!is_valid_buffer(buffer, size)) {
-        exit(-1);
-      }
+      // if (!is_valid_buffer(buffer, size)) {
+      //   exit(-1);
+      // }
 
-      f->eax = sys_write(fd, buffer, size);
+      f->eax = write(fd, buffer, size);
       break;
     }
     /*2-3*/
@@ -125,26 +126,32 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 /*2-2*/
 // 포인터가 유효한 유저 포인터인지 검사하는 함수
+// bool is_valid_ptr(const void *usr_ptr) {
+//   // 1. NULL 체크
+//   if (usr_ptr == NULL) {
+//     return false;
+//   }
+
+//   // 2. 유저 영역 주소인지 확인 (PHYS_BASE는 커널과 유저 영역 경계)
+//   if (!is_user_vaddr(usr_ptr)) {
+//     return false;
+//   }
+
+//   // 3. 해당 주소가 실제로 매핑된 메모리인지 확인
+//   void *phys_addr = pagedir_get_page(thread_current()->pagedir, usr_ptr);
+//   if (phys_addr == NULL) {
+//     return false;
+//   }
+
+//   // 전부 통과했으면 유효한 포인터
+//   return true;
+// }
+
+
 bool is_valid_ptr(const void *usr_ptr) {
-  // 1. NULL 체크
-  if (usr_ptr == NULL) {
-    return false;
-  }
-
-  // 2. 유저 영역 주소인지 확인 (PHYS_BASE는 커널과 유저 영역 경계)
-  if (!is_user_vaddr(usr_ptr)) {
-    return false;
-  }
-
-  // 3. 해당 주소가 실제로 매핑된 메모리인지 확인
-  void *phys_addr = pagedir_get_page(thread_current()->pagedir, usr_ptr);
-  if (phys_addr == NULL) {
-    return false;
-  }
-
-  // 전부 통과했으면 유효한 포인터
-  return true;
+  return usr_ptr != NULL && is_user_vaddr(usr_ptr);
 }
+
 /*2-2*/
 
 void halt(void) {
@@ -165,11 +172,13 @@ int wait(pid_t pid) {
 
 /*2-3*/
 
-int sys_write(int fd, const void *buffer, unsigned size) {
+int write(int fd, const void *buffer, unsigned size) {
   // 1. 포인터 유효성 검사
   if (!is_valid_ptr(buffer)) {
     exit(-1);
   }
+
+  
 
   // 2. 파일 시스템 락 획득
   lock_acquire(&fs_lock);
