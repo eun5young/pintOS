@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
+
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -23,6 +25,16 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+struct child_thread_elem
+  {
+    int exit_status;
+    int loading_status;
+    struct semaphore wait_sema;
+    tid_t tid;
+    struct thread *t;
+    struct list_elem elem;
+  };
 
 /* A kernel thread or user process.
 
@@ -115,10 +127,10 @@ struct thread
     //modified by me
       int nice;                          /* Nice value for MLFQS. */
       int recent_cpu;                   /* Recent CPU usage for MLFQS. */
-
-      /*pintos2-2*/
-      int exit_status;
-      /*2-2*/
+  
+      struct thread *parent;
+      struct list children_list;
+      struct child_thread_elem *child_elem;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -159,6 +171,8 @@ void thread_wakeup(int64_t ticks);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+struct child_thread_elem *thread_get_child (tid_t tid);
+
 int thread_get_nice (void);
 void thread_set_nice (int);
 void mlfqs_update_priority(struct thread *t);
@@ -173,3 +187,5 @@ void update_recent_cpu_all(void);
 void update_priority_all(void);
 
 #endif /* threads/thread.h */
+
+typedef int pid_t;

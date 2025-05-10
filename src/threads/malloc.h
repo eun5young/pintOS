@@ -3,6 +3,8 @@
 
 #include <debug.h>
 #include <stddef.h>
+#include "threads/malloc.h"
+
 
 void malloc_init (void);
 void *malloc (size_t) __attribute__ ((malloc));

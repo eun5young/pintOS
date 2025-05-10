@@ -365,6 +365,7 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+  sema_up (&(thread_current ()->child_elem->wait_sema));
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -651,6 +652,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
 
   t->magic = THREAD_MAGIC;
+  list_init (&t->children_list);
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -873,3 +875,30 @@ update_priority_all(void) {
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+struct child_thread_elem *
+thread_get_child (tid_t tid)
+{
+  struct list *children = &thread_current ()->children_list;
+  struct list_elem *e = list_begin (children);
+  struct child_thread_elem *child_elem;
+  for(;e != list_end (children); e = list_next (e))
+    {
+      child_elem = list_entry (e, struct child_thread_elem, elem);
+      if(child_elem->tid == tid)
+        return child_elem;
+    }
+  return NULL;
+}
+
+bool
+remove_child (tid_t tid)
+{
+  struct child_thread_elem *child_elem = thread_get_child (tid);
+  if (child_elem == NULL)
+    return false;
+  list_remove (&child_elem->elem);
+  free (child_elem);
+  
+  return true;
+}
