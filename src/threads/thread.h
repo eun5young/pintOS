@@ -95,6 +95,7 @@ struct child_thread_elem
 struct thread
   {
     /* Owned by thread.c. */
+    
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
@@ -119,6 +120,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+struct file *running_file;       /* 실행 중인 파일 */
 #endif
 
     /* Owned by thread.c. */
@@ -186,6 +188,6 @@ void update_load_avg(void);
 void update_recent_cpu_all(void);
 void update_priority_all(void);
 
-#endif /* threads/thread.h */
-
 typedef int pid_t;
+
+#endif /* threads/thread.h */

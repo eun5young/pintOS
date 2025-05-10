@@ -241,13 +241,13 @@ int
 write (int fd, const void *buffer, unsigned length)
 {
   buffer = user_to_kernel_vaddr (buffer);
+
   /* write to stdout (console) */
   if (fd == 1)
     {
       putbuf (buffer, length);
       return length;
     }
-  return -1;
 
   /* write to file */
   lock_acquire (&filesys_lock);
@@ -255,12 +255,13 @@ write (int fd, const void *buffer, unsigned length)
   if (f == NULL)
     {
       lock_release (&filesys_lock);
-      return -1; // try 0
+      return -1;
     }
   int size = file_write (f, buffer, length);
   lock_release (&filesys_lock);
   return size;
 }
+
 
 void seek (int fd, unsigned position)
 {
@@ -292,7 +293,8 @@ unsigned tell (int fd)
   return pos;
 }
 
-void close (int fd)
+void
+close (int fd)
 {
   lock_acquire (&filesys_lock);
   struct file *f = get_file_by_fd (fd);
@@ -301,10 +303,15 @@ void close (int fd)
       lock_release (&filesys_lock);
       return;
     }
+
+  // Do not close if the file is currently running
+  if (f != thread_current()->running_file)
+    file_close (f);
+
   remove_from_file_table (fd);
-  file_close (f);
   lock_release (&filesys_lock);
 }
+
 
 /* return kernel virtual address pointing to the physical address pointed to by
    uaddr, to be used in kernel code.
