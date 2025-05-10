@@ -22,6 +22,7 @@
 #include "lib/string.h"
 #include <stdlib.h>
 #include "devices/input.h"
+#include <stdlib.h>
 
 
 static void syscall_handler (struct intr_frame *);
@@ -47,6 +48,18 @@ static void *user_to_kernel_vaddr(void *uaddr); // 커널 주소로 변환 함�
 static pid_t exec(const char *file);            // exec 함수
 /*2-3-1*/
 static struct file_descriptor *get_open_file(int fd);
+
+/*2-3-2*/
+bool create(const char *file_name, unsigned size);
+bool remove(const char *file_name);
+int open(const char *file_name);
+static int filesize(int fd);
+int read(int fd, void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+void close(int fd);
+void close_open_file(int fd);
+static int allocate_fd(void);  // 이걸 syscall.c 상단에 추가
 
 
 /*2-3*/
@@ -106,6 +119,32 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WRITE:
       f->eax = write(arg0, (const void *)arg1, (unsigned)arg2);
       break;
+    case SYS_CREATE:
+      f->eax = create((const char *)arg0, (unsigned)arg1);
+      break;
+    case SYS_REMOVE:
+      f->eax = remove((const char *)user_to_kernel_vaddr((void *)arg0));
+      break;
+    case SYS_OPEN:
+      f->eax = open((const char *)user_to_kernel_vaddr((void *)arg0));
+      break;
+    case SYS_FILESIZE:
+      f->eax = filesize(arg0); // arg0 == fd
+      break;
+    case SYS_READ:
+      f->eax = read(arg0, (void *)user_to_kernel_vaddr((void *)arg1), (unsigned)arg2);
+      break;
+    case SYS_SEEK:
+      seek(arg0, (unsigned)arg1);
+      break;
+    case SYS_TELL:
+      f->eax = tell(arg0);
+      break;
+    case SYS_CLOSE:
+      close(arg0);
+      break;
+    
+
     default:
       exit(-1);
   }
@@ -205,3 +244,214 @@ int write(int fd, const void *buffer, unsigned size) {
 }
 /*2-3-1*/
 
+/*2-3-2*/
+/* create syscall 구현 (슬라이드 스타일) */
+bool create(const char *file_name, unsigned size) {
+  // 1. 포인터 유효성 검사
+  if (!is_valid_ptr(file_name)) exit(-1);
+
+  // 2. 파일 시스템 락 획득
+  lock_acquire(&filesys_lock);
+
+  // 3. 파일 생성 시도
+  bool status = filesys_create(file_name, size);
+
+  // 4. 락 해제
+  lock_release(&filesys_lock);
+
+  // 5. 결과 반환
+  return status;
+}
+
+/* remove syscall 구현 (슬라이드 스타일) */
+bool remove(const char *file_name) {
+  // 1. 포인터 유효성 검사
+  if (!is_valid_ptr(file_name)) exit(-1);
+
+  // 2. 파일 시스템 락 획득
+  lock_acquire(&filesys_lock);
+
+  // 3. 파일 삭제 시도
+  bool status = filesys_remove(file_name);
+
+  // 4. 락 해제
+  lock_release(&filesys_lock);
+
+  // 5. 결과 반환
+  return status;
+}
+
+int open(const char *file_name) {
+    if (!is_valid_ptr(file_name)) exit(-1);
+
+    lock_acquire(&filesys_lock);
+
+    struct file *f = filesys_open(file_name);
+    if (f == NULL) {
+        lock_release(&filesys_lock);
+        return -1;
+    }
+
+    struct file_descriptor *fd_struct = malloc(sizeof(struct file_descriptor));
+    if (fd_struct == NULL) {
+        file_close(f);
+        lock_release(&filesys_lock);
+        return -1;
+    }
+    memset(fd_struct, 0, sizeof(struct file_descriptor));
+
+    int fd = allocate_fd();
+    fd_struct->fd_num = fd;
+    fd_struct->owner = thread_current()->tid;
+    fd_struct->file_struct = f;
+    list_push_back(&file_table, &fd_struct->elem);
+
+    lock_release(&filesys_lock);
+    return fd;
+}
+
+/*2-3-2*/
+/* 파일 디스크립터로부터 파일 크기를 구하는 시스템 콜 */
+int filesize(int fd) {
+  // 1. 파일 시스템 락 획득
+  lock_acquire(&filesys_lock);
+
+  // 2. fd에 해당하는 file_descriptor 검색
+  struct file_descriptor *fd_struct = get_open_file(fd);
+
+  // 3. 유효성 확인 및 파일 크기 얻기
+  int size = -1;
+  if (fd_struct != NULL && fd_struct->file_struct != NULL) {
+    size = file_length(fd_struct->file_struct); // 실제 파일 크기 조회
+  }
+
+  // 4. 락 해제
+  lock_release(&filesys_lock);
+
+  // 5. 결과 반환
+  return size;
+}
+/*2-3-2*/
+
+int read(int fd, void *buffer, unsigned size) {
+  // 1. 포인터 유효성 검사
+  if (!is_valid_ptr(buffer)) exit(-1);
+
+  // 2. 파일 시스템 락 획득
+  lock_acquire(&filesys_lock);
+
+  int bytes_read = -1;
+
+  // 3. 잘못된 경우(STDOUT_FILENO에 read 요청 시)
+  if (fd == STDOUT_FILENO) {
+    lock_release(&filesys_lock);
+    return -1;
+  }
+
+  // 4. 표준 입력 (키보드 입력)
+  if (fd == STDIN_FILENO) {
+    char *buf = buffer;
+    unsigned i;
+    for (i = 0; i < size; i++)
+      buf[i] = input_getc(); // 키보드에서 한 글자씩 읽어옴
+    lock_release(&filesys_lock);
+    return size;
+  }
+
+  // 5. 일반 파일 읽기
+  struct file_descriptor *fdt = get_open_file(fd);
+  if (fdt != NULL && fdt->file_struct != NULL) {
+    bytes_read = file_read(fdt->file_struct, buffer, size);
+  }
+
+  // 6. 파일 시스템 락 해제 및 결과 반환
+  lock_release(&filesys_lock);
+  return bytes_read;
+}
+
+void seek(int fd, unsigned position) {
+  // 1. 파일 시스템 락 획득
+  lock_acquire(&filesys_lock);
+
+  // 2. 파일 디스크립터 구조체 검색
+  struct file_descriptor *fd_struct = get_open_file(fd);
+
+  // 3. 유효성 검사 및 포인터 위치 조정
+  if (fd_struct != NULL && fd_struct->file_struct != NULL) {
+    file_seek(fd_struct->file_struct, position);
+  }
+
+  // 4. 파일 시스템 락 해제
+  lock_release(&filesys_lock);
+}
+
+unsigned tell(int fd) {
+  // 1. 파일 시스템 락 획득
+  lock_acquire(&filesys_lock);
+
+  // 2. 파일 디스크립터 구조체 가져오기
+  struct file_descriptor *fd_struct = get_open_file(fd);
+
+  unsigned pos = -1;  // 기본 반환값 (에러 시 -1 반환)
+
+  // 3. 유효하면 위치 반환
+  if (fd_struct != NULL && fd_struct->file_struct != NULL)
+    pos = file_tell(fd_struct->file_struct);
+
+  // 4. 락 해제
+  lock_release(&filesys_lock);
+
+  // 5. 결과 반환
+  return pos;
+}
+
+void close(int fd) {
+  // 1. 파일 시스템 락 획득
+  lock_acquire(&filesys_lock);
+
+  // 2. 파일 디스크립터 구조체 검색
+  struct file_descriptor *fd_struct = get_open_file(fd);
+
+  // 3. 유효성 검사 및 현재 스레드가 소유자인지 확인
+  if (fd_struct != NULL && fd_struct->owner == thread_current()->tid) {
+    // 실제 파일 닫기
+    file_close(fd_struct->file_struct);
+
+    // 리스트에서 제거 후 메모리 해제
+    list_remove(&fd_struct->elem);
+    free(fd_struct);
+  }
+
+  // 4. 락 해제
+  lock_release(&filesys_lock);
+}
+
+void close_open_file(int fd) {
+  struct list_elem *e;
+
+  // 리스트 순회
+  for (e = list_begin(&file_table); e != list_end(&file_table); e = list_next(e)) {
+    struct file_descriptor *fd_struct = list_entry(e, struct file_descriptor, elem);
+
+    // fd 일치 여부 확인
+    if (fd_struct->fd_num == fd && fd_struct->owner == thread_current()->tid) {
+      // 1. 리스트에서 제거
+      list_remove(e);
+
+      // 2. 파일 닫기
+      file_close(fd_struct->file_struct);
+
+      // 3. 메모리 해제
+      free(fd_struct);
+      return;
+    }
+  }
+}
+
+/* 전역 변수: 파일 디스크립터 번호를 고유하게 관리 */
+static int next_fd = 2;  // 0은 STDIN, 1은 STDOUT이므로 2부터 시작
+
+/* allocate_fd: 유일한 fd 번호를 반환 */
+static int allocate_fd(void) {
+  return next_fd++;
+}
