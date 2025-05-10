@@ -29,7 +29,7 @@ struct start_process_args
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static void main_stack_setup (char *cmd, int argc, void **esp);
+static void argument_stack (char *cmd, int argc, void **esp);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -118,7 +118,7 @@ start_process (void *args_)
     }
 
   /* push main function arguments to stack */
-  main_stack_setup ((char*) file_name_, argc, &if_.esp);
+  argument_stack ((char*) file_name_, argc, &if_.esp);
   //test1 hex_dump((uintptr_t)if_.esp, if_.esp, (size_t)(PHYS_BASE - (uintptr_t)if_.esp), true);
     
     child_elem->loading_status = 0;
@@ -137,7 +137,7 @@ start_process (void *args_)
 }
 
 static void
-main_stack_setup (char *cmd, int argc, void **esp)
+argument_stack (char *cmd, int argc, void **esp)
 {
   char *token, *save_ptr;
   char **argv = malloc (sizeof(char*) * (argc + 2));
