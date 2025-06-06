@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <kernel/list.h>
 #include <threads/synch.h>
+/*pintos 3*/
+#include "lib/kernel/hash.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -124,6 +126,9 @@ typedef int tid_t;
  
      /* Owned by thread.c. */
      unsigned magic;
+
+     /*pintos 3*/
+     struct hash spt;
    };
 
   struct child {

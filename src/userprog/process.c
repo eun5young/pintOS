@@ -90,6 +90,9 @@ tid_t
      if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
      if_.cs = SEL_UCSEG;
      if_.eflags = FLAG_IF | FLAG_MBS;
+
+     /*pintos 3*/
+     spt_init(&thread_current()->spt);
    
      success = load (file_name, &if_.eip, &if_.esp);
      
@@ -202,6 +205,8 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  spt_destroy(&cur->spt);
 
 
     if(cur->exit_error==-100)
