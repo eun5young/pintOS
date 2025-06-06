@@ -1,3 +1,6 @@
+#include "vm/page.h"
+#include "threads/vaddr.h"
+
 unsigned page_hash(const struct hash_elem *e, void *aux UNUSED) {
   const struct supplemental_page_table_entry *spte = 
       hash_entry(e, struct supplemental_page_table_entry, elem);
