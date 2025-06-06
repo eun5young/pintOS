@@ -12,6 +12,9 @@ typedef int off_t;  // 여기가 핵심!
 void spt_init(struct hash *spt);
 void spt_destroy(struct hash *spt);
 
+bool vm_load_page_from_filesys(struct supplemental_page_table_entry *spte, void *kpage);
+
+
 
 enum page_status {
   ALL_ZERO,     // 0으로 채울 페이지
